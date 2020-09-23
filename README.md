@@ -1,9 +1,15 @@
 mac/max Color Maximite 2 Archiving Tool by Epsilon
 --------------------------------------------------
-Current Version: 0.2
+Current Version: 0.3
 
 ChangeLog
 ---------
+0.3:
+- Fix bug on DOS causing script to error out if current working directory contains spaces.
+- On DOS delete temporary files ntsh.temp.
+- max.bas now prompts before overwrite (instead of aborting).
+- Some cosmetic fixes.
+
 0.2:
 - Fix command line processing on DOS.
 - Fix bug on DOS where sometimes 'directory not found' would be reported even though directory is present.
