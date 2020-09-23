@@ -3,7 +3,7 @@ OPTION DEFAULT NONE
 OPTION BASE 0
 
 CONST MAX_CHUNK_SIZE% = 128
-CONST VERSION$ = "0.2"
+CONST VERSION$ = "0.3"
 
 'DOS specific constants and variables'
 IF MM.DEVICE$ = "DOS" THEN
@@ -11,6 +11,8 @@ IF MM.DEVICE$ = "DOS" THEN
   CONST MAX_NUM_FILES%=400
 
   DIM refFile$ = CWD$ + "\ntsh.temp"
+  DIM refFileQuoted$ = CHR$(34) + refFile$ + CHR$(34)
+
   DIM dirList$(MAX_NUM_DIRS%)
   DIM fileList$(MAX_NUM_FILES%)
   DIM dirListIdx%, fileListIdx%
@@ -36,7 +38,7 @@ ENDIF
 
 'Allow to pass in directory to archive as command line argument
 IF (cmdLine$ = "") THEN
-  INPUT "Directory to archive:"; dirToArchive$
+  INPUT "Directory to archive"; dirToArchive$
 ELSE
   dirToArchive$ = cmdLine$
 ENDIF
@@ -73,6 +75,7 @@ CLOSE #3
 
 'DOS requires a QUIT or we get stuck on the BASIC prompt.
 IF MM.DEVICE$ = "DOS" THEN
+  SYSTEM "DEL " + refFileQuoted$
   QUIT
 ENDIF
 
@@ -81,7 +84,7 @@ FUNCTION dirExists%(dirName$)
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1
-    SYSTEM "IF exist " + CHR$(34) + dirName$ + CHR$(34) +  " (echo 1 > " + refFile$ + ") ELSE (echo 0 > " + refFile$ + ")"
+    SYSTEM "IF exist " + CHR$(34) + dirName$ + CHR$(34) +  " (echo 1 > " + refFileQuoted$ + ") ELSE (echo 0 > " + refFileQuoted$ + ")"
     OPEN refFile$ FOR INPUT AS #3
     LOCAL res$
     res$ = INPUT$(1, #3)
@@ -97,7 +100,7 @@ FUNCTION fileExists%(fileName$)
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1
-    SYSTEM "DIR /a:-d /b " + CHR$(34) + fileName$ + CHR$(34) + "> " + refFile$ 
+    SYSTEM "DIR /a:-d /b " + CHR$(34) + fileName$ + CHR$(34) + "> " + refFileQuoted$ 
     OPEN refFile$ FOR INPUT AS #3
     LOCAL line$
     LINE INPUT #3, line$
@@ -113,7 +116,7 @@ FUNCTION listDirs$()
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1
-    SYSTEM "DIR /a:d /b > " + refFile$
+    SYSTEM "DIR /a:d /b > " + refFileQuoted$
     OPEN refFile$ FOR INPUT AS #3
     dirListIdx%=0
     LOCAL line$
@@ -144,7 +147,7 @@ FUNCTION listFiles$()
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1
-    SYSTEM "DIR /a:-d /b > " + refFile$
+    SYSTEM "DIR /a:-d /b > " + refFileQuoted$
     OPEN refFile$ FOR INPUT AS #3
     fileListIdx%=0
     LOCAL line$
