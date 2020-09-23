@@ -3,7 +3,7 @@ OPTION DEFAULT NONE
 OPTION BASE 0
 
 CONST MAX_CHUNK_SIZE% = 128
-CONST VERSION$ = "0.2"
+CONST VERSION$ = "0.3"
 PRINT "Extract Maximite Archive " VERSION$ " by Epsilon"
 
 'DOS specific constants and variables'
@@ -12,6 +12,8 @@ IF MM.DEVICE$ = "DOS" THEN
   CONST MAX_NUM_FILES%=400
 
   DIM refFile$ = CWD$ + "\ntsh.temp"
+  DIM refFileQuoted$ = CHR$(34) + refFile$ + CHR$(34)
+
   DIM dirList$(MAX_NUM_DIRS%)
   DIM fileList$(MAX_NUM_FILES%)
   DIM dirListIdx%, fileListIdx%
@@ -22,6 +24,7 @@ ENDIF 'DOS specific constants and variables
 DIM archiveName$, cmdLine$
 DIM recursionLevel% = 0
 DIM errno% = 0
+DIM startDir$ = CWD$
 
 'Allow to pass in archive to extract as command line argument
 IF MM.DEVICE$ = "DOS" THEN
@@ -37,7 +40,7 @@ ENDIF
 
 'Allow to pass in archive as command line argument
 IF (cmdLine$ = "") THEN
-  INPUT "Archive to extract:"; archiveName$
+  INPUT "Archive to extract"; archiveName$
 ELSE
   archiveName$ = cmdLine$
 ENDIF
@@ -64,6 +67,8 @@ IF errno% <> 0 THEN
   PRINT "errno=" errno%
 ENDIF
 
+CHDIR startDir$
+
 ON ERROR SKIP 1
 CLOSE #1
 
@@ -75,6 +80,8 @@ CLOSE #3
 
 'DOS requires a QUIT or we get stuck on the BASIC prompt.
 IF MM.DEVICE$ = "DOS" THEN
+  ON ERROR SKIP 1
+  SYSTEM "DEL " + refFileQuoted$ 
   QUIT
 ENDIF
 
@@ -83,7 +90,7 @@ FUNCTION dirExists%(dirName$)
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1
-    SYSTEM "IF exist " + CHR$(34) + dirName$ + CHR$(34) +  " (echo 1 > " + refFile$ + ") ELSE (echo 0 > " + refFile$ + ")"
+    SYSTEM "IF exist " + CHR$(34) + dirName$ + CHR$(34) +  " (echo 1 > " + refFileQuoted$ + ") ELSE (echo 0 > " + refFileQuoted$ + ")"
     OPEN refFile$ FOR INPUT AS #3
     LOCAL res$
     res$ = INPUT$(1, #3)
@@ -99,7 +106,7 @@ FUNCTION fileExists%(fileName$)
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1
-    SYSTEM "DIR /a:-d /b " + CHR$(34) + fileName$ + CHR$(34) + "> " + refFile$ 
+    SYSTEM "DIR /a:-d /b " + CHR$(34) + fileName$ + CHR$(34) + "> " + refFileQuoted$ 
     OPEN refFile$ FOR INPUT AS #3
     LOCAL line$
     LINE INPUT #3, line$
@@ -115,7 +122,7 @@ FUNCTION listDirs$()
   IF MM.DEVICE$ = "DOS" THEN
     'DOS MMBasic does not have a DIR$ function :-(
     ON ERROR SKIP 1 'Needed to absorb "failures" such as File Not Found.
-    SYSTEM "DIR /a:d /b > " + refFile$
+    SYSTEM "DIR /a:d /b > " + refFileQuoted$
     OPEN refFile$ FOR INPUT AS #3
     dirListIdx%=0
     LOCAL line$
@@ -145,7 +152,7 @@ END FUNCTION
 FUNCTION listFiles$()
   IF MM.DEVICE$ = "DOS" THEN
     ON ERROR SKIP 1 'Needed to absorb "failures" such as File Not Found.
-    SYSTEM "DIR /a:-d /b > " + refFile$
+    SYSTEM "DIR /a:-d /b > " + refFileQuoted$
     OPEN refFile$ FOR INPUT AS #3
     fileListIdx%=0
     LOCAL line$
@@ -241,9 +248,13 @@ SUB processFile(fileToProcess$)
   'Refuse to overwrite existing files/dirs.
   IF (fileExists%(fileToProcess_l$) <> 0) OR (dirExists%(fileToProcess_l$) <> 0) THEN
     PRINT "File or directory already exists: " fileToProcess_l$
-    PRINT "Aborting..."
-    errno% = 1
-    EXIT SUB
+    LOCAL yesNo$
+    INPUT "Overwrite (Y/N)"; yesNo$
+    IF UCASE$(yesNo$) <> "Y" THEN
+      PRINT "Aborting..."
+      errno% = 1
+      EXIT SUB
+    ENDIF
   ENDIF
 
   OPEN fileToProcess_l$ FOR OUTPUT AS #2
@@ -279,14 +290,7 @@ SUB processDir(dirToProcess$)
 
   PRINT SPACE$(recursionLevel%*2) "mkdir " dirToProcess_l$
 
-  'Refuse to overwrite existing entries.
-  IF (fileExists%(dirToProcess_l$) <> 0) OR (dirExists%(dirToProcess_l$) <> 0) THEN
-    PRINT "File or directory already exists: " dirToProcess_l$
-    PRINT "Aborting"...
-    errno% = 3
-    EXIT SUB
-  ENDIF
-
+  ON ERROR SKIP 1
   MKDIR dirToProcess_l$
   CHDIR dirToProcess_l$
   recursionLevel% = recursionLevel% - 1
