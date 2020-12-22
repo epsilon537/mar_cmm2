@@ -1,5 +1,5 @@
-mac/max Color Maximite 2 Archiving Tool by Epsilon
---------------------------------------------------
+Color Maximite 2 Archiving Tool by Epsilon
+------------------------------------------
 Current Version: 0.4
 
 ChangeLog
