@@ -1,9 +1,15 @@
 mac/max Color Maximite 2 Archiving Tool by Epsilon
 --------------------------------------------------
-Current Version: 0.3
+Current Version: 0.4
 
 ChangeLog
 ---------
+0.4:
+- Combined mac.bas and max.bas into a single program, mar.bas.
+- Added option to create and extract LZ1 compressed archives.
+- Created an equivalent Python version, mar.py, intended for running on a host machine (Windows, MacOSX, Linux).
+- DOS MMBasic version of mac.bas is no longer supported. Please use Python version instead.
+
 0.3:
 - Fix bug on DOS causing script to error out if current working directory contains spaces.
 - On DOS delete temporary files ntsh.temp.
@@ -19,155 +25,32 @@ ChangeLog
 
 Description
 -----------
-Mac.bas allows you to roll up a directory tree into a single file archive. 
-The created archive has the same name as the given directory, with a .mar extension.
+On CMM2, mar.bas allows you to roll up and optionally compress a directory tree into a single file archive, and vice versa.
+mar.py is an equivalent Python implementation intended for running on Windows, MacOSX or Linux. This allows you to create your archive on a host machine,
+transfer it over to CMM2 and unpack it there, and vice versa.
 
-Max.bas allows you to unpack a .mar archive, creating a directory tree with the same name as the given archive, without the .mar extension.
+Usage
+-----
+On CMM2:
+  *mar c <dir> : archive directory <dir> into file <dir>.mar
+  *mar cz <dir> : archive and lz1 compress directory <dir> into file <dir>.mz1
+  *mar x <archive>.mar : extract <archive>.mar archive
+  *mar xz <archive>.mz1 : extract <archive>.mz1 compressed archive
 
-Mac.bas and Max.bas work both on PC and on Color Maximite 2, so you can download a package on your PC (e.g. Mauro's psgmini_cmm2 demo), archive it on PC using mac.bas, transfer it over to your CMM2 using XMODEM, and unpack the archive on your CMM2 using max.bas.
+On Windows/MacOSX/Linux:
+  python mar c <dir> : archive directory <dir> into file <dir>.mar
+  python mar cz <dir> : archive and lz1 compress directory <dir> into file <dir>.mz1
+  python mar x <archive>.mar : extract <archive>.mar archive
+  python mar xz <archive>.mz1 : extract <archive>.mz1 compressed archive
 
-Example 1: Creating a .mar archive on CMM2
-------------------------------------------
-> list files
-A:/
-   <DIR>  bak
-   <DIR>  psgmini_cmm2
-10:47 18-09-2020       7847  mac.bas
-09:23 18-09-2020       9216  max.bas
-...
-3 directories, 13 files
->
-> *mac psgmini_cmm2
-Create Maximite Archive 0.1 by Epsilon
-  Processing dir psgmini_cmm2
-  Processing file .gitattributes
-  Processing file psgdemo.bas
-  Processing file psgmini.inc
-  Processing file README.md
-    Processing dir ASSETS
-    Processing file ALESTE.VGM
-    ...
-Done.
+Required CMM2 firmware version
+------------------------------
+V5.06.00
 
-> list files
-A:/
-   <DIR>  bak
-   <DIR>  psgmini_cmm2
-10:47 18-09-2020       7847  mac.bas
-09:23 18-09-2020       9216  max.bas
-11:08 18-09-2020     878068  psgmini_cmm2.mar
-...
+Required Python version
+-----------------------
+3.x
 
-Example 2:Extracting a .mar archive on CMM2
--------------------------------------------
-
-> list files
-A:/
-   <DIR>  bak
-10:47 18-09-2020       7847  mac.bas
-09:23 18-09-2020       9216  max.bas
-11:08 18-09-2020     878068  psgmini_cmm2.mar
-...
-
-> *max psgmini_cmm2.mar
-Extract Maximite Archive 0.1 by Epsilon
-  mkdir psgmini_cmm2
-Processing file .gitattributes
-Processing file psgdemo.bas
-Processing file psgmini.inc
-Processing file README.md
-  mkdir ASSETS
-Processing file ALESTE.VGM
-Processing file ALEXKIDD.VGM
-Processing file AWESOME.vgm
-Processing file BATTLETOADS2.VGM
-Processing file BEAST1.vgm
-...
-End of archive reached.
-Done.
-
-> list files
-A:/
-   <DIR>  bak
-   <DIR>  psgmini_cmm2
-10:47 18-09-2020       7847  mac.bas
-09:23 18-09-2020       9216  max.bas
-11:08 18-09-2020     878068  psgmini_cmm2.mar
-...
-
-Example 3: Creating a .mar archive on PC
-----------------------------------------
-
-c:\cmm2\mar>dir
- Volume in drive C is OS
- Volume Serial Number is 8497-A711
-
- Directory of c:\cmm2\mar
-
-09/18/2020  12:04 PM    <DIR>          .
-09/18/2020  12:04 PM    <DIR>          ..
-09/18/2020  10:48 AM             7,845 mac.bas
-09/18/2020  12:02 PM             2,365 mac_max.readme
-09/17/2020  10:11 PM             9,178 max.bas
-09/18/2020  12:04 PM                 0 ntsh.temp
-09/18/2020  12:04 PM    <DIR>          psgmini_cmm2
-               5 File(s)        897,456 bytes
-               3 Dir(s)  101,267,017,728 bytes free
-
-c:\cmm2\mar>..\DOS_MMBasic\MMBasic.exe mac.bas psgmini_cmm2
-...
-c:\cmm2\mar>dir
- Volume in drive C is OS
- Volume Serial Number is 8497-A711
-
- Directory of c:\cmm2\mar
-
-09/18/2020  12:04 PM    <DIR>          .
-09/18/2020  12:04 PM    <DIR>          ..
-09/18/2020  10:48 AM             7,845 mac.bas
-09/18/2020  12:02 PM             2,365 mac_max.readme
-09/17/2020  10:11 PM             9,178 max.bas
-09/18/2020  12:04 PM                 0 ntsh.temp
-09/18/2020  12:04 PM    <DIR>          psgmini_cmm2
-09/18/2020  12:03 PM           878,068 psgmini_cmm2.mar
-               5 File(s)        897,456 bytes
-               3 Dir(s)  101,267,017,728 bytes free
-
-Example 4: Extracting a .mar archive on PC
-----------------------------------------  
-
-c:\cmm2\mar>dir
- Volume in drive C is OS
- Volume Serial Number is 8497-A711
-
- Directory of c:\cmm2\mar
-
-09/18/2020  12:04 PM    <DIR>          .
-09/18/2020  12:04 PM    <DIR>          ..
-09/18/2020  10:48 AM             7,845 mac.bas
-09/18/2020  12:02 PM             2,365 mac_max.readme
-09/17/2020  10:11 PM             9,178 max.bas
-09/18/2020  12:04 PM                 0 ntsh.temp
-09/18/2020  12:03 PM           878,068 psgmini_cmm2.mar
-               5 File(s)        897,456 bytes
-               3 Dir(s)  101,267,017,728 bytes free    
-
-c:\cmm2\mar>..\DOS_MMBasic\MMBasic.exe max.bas psgmini_cmm2.mar
-
-c:\cmm2\mar>dir
- Volume in drive C is OS
- Volume Serial Number is 8497-A711
-
- Directory of c:\cmm2\mar
-
-09/18/2020  12:04 PM    <DIR>          .
-09/18/2020  12:04 PM    <DIR>          ..
-09/18/2020  10:48 AM             7,845 mac.bas
-09/18/2020  12:02 PM             2,365 mac_max.readme
-09/17/2020  10:11 PM             9,178 max.bas
-09/18/2020  12:04 PM                 0 ntsh.temp
-09/18/2020  12:04 PM    <DIR>          psgmini_cmm2
-09/18/2020  12:03 PM           878,068 psgmini_cmm2.mar
-               5 File(s)        897,456 bytes
-               3 Dir(s)  101,267,017,728 bytes free
-
+GitHub
+------
+https://github.com/epsilon537/mar_cmm2
