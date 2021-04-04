@@ -2,7 +2,9 @@ OPTION EXPLICIT
 OPTION DEFAULT NONE
 OPTION BASE 0
 
-CONST VERSION$ = "0.4"
+CONST VERSION$ = "0.5"
+CONST SELF_EXTRACTOR% = 0
+
 CONST MAX_CHUNK_SIZE% = 128
 CONST MAX_NUM_CMDLINE_ARGS% = 20
 
@@ -34,11 +36,18 @@ CONST HASHSIZE% = 1<<HASHBITS%
 'characters are in the hash accumulator at one time
 CONST SHIFTBITS% = (HASHBITS%+THRESHOLD%)\(THRESHOLD%+1)
 
+'BASE64 codec constants
+CONST ENC_CHUNK_SIZE% = 3
+CONST DEC_CHUNK_SIZE% = 4
+CONST NUM_CHUNKS_PER_LINE% = 40
+
 'sector size constants
 CONST SECTORBIT% = 10
 CONST SECTORLEN% = 1<<SECTORBIT%
 CONST HASHFLAG1% = &H8000
 CONST HASHFLAG2% = &H7FFF
+
+CONST BASE64_BLOCK_START$ = "Base64 encoded archive starts here."
 
 DIM dirToArchive$
 DIM recursionLevel% = 0
@@ -65,6 +74,15 @@ DIM masks%(16) = (0,1,3,7,15,31,63,127,255,511,1023,2047,4095,8191, 16383, 32767
 'A flag indicating whether to prompt before overwriting, or to just go ahead.
 DIM overwriteAll% = 0
 
+DIM base64table$ = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+'If SELF_EXTRACTOR is set, we don't do any command line processing.
+IF SELF_EXTRACTOR% THEN
+  PRINT "CMM2 Self-extracting archive V"+VERSION$+" by Epsilon"
+  extractSelf
+  GOTO endProg
+ENDIF
+
 PRINT "CMM2 MAR archiver V"+VERSION$+" by Epsilon"
 
 parseCmdLine(MM.CMDLINE$, cmdLineArgs$(), nArgs%)
@@ -75,46 +93,85 @@ IF nArgs%<> 2 THEN
 ENDIF
 
 DIM action$ = UCASE$(cmdLineArgs$(0))
-IF (action$ <> "C") AND (action$ <> "X") AND (action$ <> "CZ") AND (action$ <> "XZ") THEN
+IF (action$ <> "C") AND (action$ <> "S") AND (action$ <> "X") AND (action$ <> "SZ") AND (action$ <> "CZ") AND (action$ <> "XZ") THEN
   usage
   GOTO endProg
 ENDIF
 
-IF (action$="C") OR (action$="CZ") THEN
-  dirToArchive$ = cmdLineArgs$(1)
-
-  MAR_archive(dirToArchive$)
+SELECT CASE action$
+  CASE "C","CZ"
+    dirToArchive$ = cmdLineArgs$(1)
   
-  IF action$ = "CZ" THEN
+    MAR_archive(dirToArchive$)
+    
+    IF action$ = "CZ" THEN
+      LZ1_Encode(dirToArchive$+".mar", dirToArchive$+".mz1")
+      
+      PRINT "Deleting intermediate MAR: "+dirToArchive$+".mar"
+      KILL dirToArchive$+".mar"
+    ENDIF
+  CASE "X", "XZ"
+    DIM inFilename$ = cmdLineArgs$(1)
+    DIM outFilename$
+    DIM delIntermediateMar% = 0
+       
+    IF DIR$(inFilename$, FILE) = "" THEN
+      usage
+      GOTO endProg
+    ENDIF
+  
+    IF action$="XZ" THEN
+      outFilename$ = inFilename$+".mar"
+      PRINT "LZ1 decoding "+inFilename$+" to "+outFilename$
+      LZ1_Decode(inFilename$, outFilename$)
+      inFilename$ = outFilename$
+      delIntermediateMar% = 1
+    ENDIF
+  
+    MAR_extract(inFilename$)
+  
+    IF delIntermediateMar% THEN
+      PRINT "Deleting intermediate MAR: "+inFilename$
+      KILL inFilename$
+    ENDIF
+  CASE "S"
+    dirToArchive$ = cmdLineArgs$(1)
+  
+    MAR_archive(dirToArchive$)
+      
+    PRINT "Base64 encoding."
+    base64encode(dirToArchive$+".mar", dirToArchive$+".mar.base64")
+
+    PRINT "Deleting intermediate MAR: "+dirToArchive$+".mar"
+    KILL dirToArchive$+".mar"
+        
+    PRINT "Creating self-extractor: "+dirToArchive$+".mar.bas"
+    createSelfExtractor(dirToArchive$+".mar.base64", dirToArchive$+".mar.bas")
+    
+    PRINT "Deleting intermediate .base64: "+dirToArchive$+".mar.base64"
+    KILL dirToArchive$+".mar.base64"
+  CASE "SZ"
+    dirToArchive$ = cmdLineArgs$(1)
+  
+    MAR_archive(dirToArchive$)
+    
     LZ1_Encode(dirToArchive$+".mar", dirToArchive$+".mz1")
     
     PRINT "Deleting intermediate MAR: "+dirToArchive$+".mar"
     KILL dirToArchive$+".mar"
-  ENDIF
-ELSE
-  DIM inFilename$ = cmdLineArgs$(1)
-  DIM outFilename$
-  DIM delIntermediateMar% = 0
-     
-  IF DIR$(inFilename$, FILE) = "" THEN
-    usage
-    GOTO endProg
-  ENDIF
 
-  IF action$="XZ" THEN
-    outFilename$ = inFilename$+".mar"
-    PRINT "LZ1 decoding "+inFilename$+" to "+outFilename$
-    LZ1_Decode(inFilename$, outFilename$)
-    inFilename$ = outFilename$
-    delIntermediateMar% = 1
-  ENDIF
+    PRINT "Base64 encoding."
+    base64encode(dirToArchive$+".mz1", dirToArchive$+".mz1.base64")
 
-  MAR_extract(inFilename$)
-
-  IF delIntermediateMar% THEN
-    PRINT "Deleting intermediate MAR: "+inFilename$
-    KILL inFilename$
-  ENDIF
+    PRINT "Deleting intermediate .mz1: "+dirToArchive$+".mz1"
+    KILL dirToArchive$+".mz1"
+    
+    PRINT "Creating self-extractor: "+dirToArchive$+".mz1.bas"
+    createSelfExtractor(dirToArchive$+".mz1.base64", dirToArchive$+".mz1.bas")
+    
+    PRINT "Deleting intermediate .base64: "+dirToArchive$+".mz1.base64"
+    KILL dirToArchive$+".mz1.base64"
+  END SELECT
 ENDIF
 
 PRINT "Done."
@@ -133,8 +190,11 @@ CLOSE #2
 ON ERROR SKIP 1
 CLOSE #3
 
+END
+
 SUB MAR_archive(dirToArchive$)
   IF DIR$(dirToArchive$, DIR) = "" THEN
+    PRINT "Directory not found."
     usage
     GOTO endProg
   ENDIF
@@ -440,8 +500,11 @@ SUB parseCmdLine(cmdLine$, cmdLineArgs$(), nArgs%)
 END SUB
 
 SUB usage
+  PRINT "Usage:"
   PRINT "*mar c <dir> : archive directory <dir> into file <dir>.mar"
   PRINT "*mar cz <dir> : archive and lz1 compress directory <dir> into file <dir>.mz1"
+  PRINT "*mar s <dir> : archive directory <dir> into self-extracting file <dir>.mar.bas"
+  PRINT "*mar sz <dir> : archive and compress <dir> into self-extracting file <dir>.mz1.bas"
   PRINT "*mar x <archive>.mar : extract <archive>.mar archive"
   PRINT "*mar xz <archive>.mz1 : extract <archive>.mz1 compressed archive"
 END SUB
@@ -666,13 +729,14 @@ END SUB
 
 ' loads dictionary with characters from the input stream
 FUNCTION LoadDict%(dictpos%)
-  LOCAL i%, j%
+  LOCAL i%, topos%=DICTSIZE%, frompos%=0
   i% = readNbytes%(dict%(), dictpos%, SECTORLEN%)
   
   ' since the dictionary is a ring buffer, copy the characters at
   '   the very start of the dictionary to the end
   IF dictpos%=0 THEN
-    dictMove(j%+DICTSIZE%, j%, INV 0, (MAXMATCH%-1), dict%(0))          
+                                      'This was MAXMATCH-1
+    dictMove(topos%, frompos%, INV 0, MAXMATCH%, dict%(0))          
   ENDIF
   
   LoadDict%=i%
@@ -773,7 +837,7 @@ SUB compress
     IF dictpos% = DICTSIZE% THEN
       dictpos% = 0
       deleteflag% = 1 ' ok to delete now
-    ENDIF
+    ENDIF    
   LOOP
   
   'Send EOF flag
@@ -859,5 +923,259 @@ FUNCTION readNbytes%(buf%(), bufpos%, nBytes%)
   readNbytes% = bytesRead%
 END FUNCTION
 
+SUB base64decode(inFile$, outFile$)
+  OPEN inFile$ FOR INPUT AS #1
+  OPEN outFile$ FOR OUTPUT AS #2
 
-             
+  LOCAL chunkLen% = 0, inStringLoc% = 0
+  LOCAL chunk$
+  LOCAL sixBitVals%(3)
+  LOCAL threeByteVal%
+  LOCAL posInTable%
+  LOCAL outFileByteCounter% = 0
+  
+  LOCAL s$
+  LINE INPUT #1, s$
+  
+  'First line is file size.
+  LOCAL outFileSize% = VAL(s$)
+  PRINT "Output file size: "+STR$(outFileSize%)
+  
+  DO WHILE NOT EOF(#1)
+    'Read and process one line at a time
+    LINE INPUT #1, s$
+    inStringLoc% = 0
+    
+    PRINT @(0) STR$(outFileByteCounter%)+"/"+STR$(outFileSize%);
+
+    DO WHILE inStringLoc% < LEN(s$)
+      chunkLen% = MIN(LEN(s$)-inStringLoc%, DEC_CHUNK_SIZE%)  
+      'A chunk of four characters. Some padding for the last chunk.
+      chunk$ = MID$(s$, inStringLoc%+1, chunkLen%)+"AAA"
+      INC inStringLoc%, chunkLen%
+      
+      'Map the four character ASCII back to their 6-bit integer values.
+      posInTable% = INSTR(base64table$, MID$(chunk$, 1, 1))
+      IF posInTable% = 0 THEN
+        ERROR "Invalid character in encoded file: "+MID$(chunk$, 1, 1)
+      ENDIF
+      'Make zero-based  
+      sixBitVals%(0) = posInTable%-1
+  
+      posInTable% = INSTR(base64table$, MID$(chunk$, 2, 1))
+      IF posInTable% = 0 THEN
+        ERROR "Invalid character in encoded file: "+MID$(chunk$, 2, 1)
+      ENDIF
+      'Make zero-based  
+      sixBitVals%(1) = posInTable%-1
+  
+      posInTable% = INSTR(base64table$, MID$(chunk$, 3, 1))
+      IF posInTable% = 0 THEN
+        ERROR "Invalid character in encoded file: "+MID$(chunk$, 3, 1)
+      ENDIF
+      'Make zero-based  
+      sixBitVals%(2) = posInTable%-1
+      
+      posInTable% = INSTR(base64table$, MID$(chunk$, 4, 1))
+      IF posInTable% = 0 THEN
+        ERROR "Invalid character in encoded file: "+MID$(chunk$, 4, 1)
+      ENDIF
+      'Make zero-based  
+      sixBitVals%(3) = posInTable%-1
+  
+      'Compact the four 6-bit values into one 3-bytes value      
+      threeByteVal% = sixBitVals%(0) + (sixBitVals%(1)<<6) + (sixBitVals%(2)<<12) + (sixBitVals%(3)<<18)
+      
+      'Now convert the three byte value to a 3-byte string
+      chunk$ = CHR$(threeByteVal% AND 255)
+      threeByteVal% = threeByteVal% >> 8
+      chunk$ = chunk$ + CHR$(threeByteVal% AND 255)
+      threeByteVal% = threeByteVal% >> 8
+      chunk$ = chunk$ + CHR$(threeByteVal% AND 255)
+        
+      IF outFileByteCounter% + ENC_CHUNK_SIZE% <= outFileSize% THEN    
+        'Write chunk out to the output file.
+        'Truncate so we don't exceed the output file size
+        PRINT #2, chunk$;
+        INC outFileByteCounter%, ENC_CHUNK_SIZE%
+      ELSE
+        PRINT #2, LEFT$(chunk$, outFileSize% - outFileByteCounter%);
+        INC outFileByteCounter%, outFileSize% - outFileByteCounter%
+      ENDIF
+    LOOP
+  LOOP
+
+  PRINT
+      
+  CLOSE #1
+  CLOSE #2
+END SUB
+
+SUB base64encode(inFile$, outFile$)
+  OPEN inFile$ FOR INPUT AS #1
+  OPEN outFile$ FOR OUTPUT AS #2
+    
+  LOCAL chunkLen% = 0, inFileLoc% = 0
+  LOCAL chunk$
+  LOCAL inFileSize% = MM.INFO(FILESIZE inFile$)
+  LOCAL threeByteVal%
+  LOCAL sixBitVals%(3)
+  LOCAL encodedChunk$
+  LOCAL chunkCounter%=0
+  
+  'Write file size as a string as the first line
+  PRINT #2, STR$(inFileSize%)
+        
+  DO WHILE (NOT EOF(#1))
+    chunkLen% = MIN(inFileSize%-inFileLoc%, ENC_CHUNK_SIZE%)  
+    inFileLoc% = inFileLoc% + chunkLen%
+    
+    'A chunk of three characters, with 2 characters of padding for the end of the file
+    chunk$ = INPUT$(chunkLen%, #1) + "  "
+    
+    'Load the three character ASCII values into an integer.
+    threeByteVal% = ASC(MID$(chunk$, 1, 1)) + (ASC(MID$(chunk$, 2, 1))<<8) + (ASC(MID$(chunk$, 3, 1))<<16)
+    
+    'Now extra 4 groups of 6 bits
+    sixBitVals%(0) = threeByteVal% AND 63
+    threeByteVal% = threeByteVal% >> 6
+    sixBitVals%(1) = threeByteVal% AND 63
+    threeByteVal% = threeByteVal% >> 6
+    sixBitVals%(2) = threeByteVal% AND 63
+    threeByteVal% = threeByteVal% >> 6
+    sixBitVals%(3) = threeByteVal% AND 63
+    
+    'The 6-bit values we convert to text characters again using the base64table
+    encodedChunk$ = MID$(base64table$, 1+sixBitVals%(0), 1)
+    encodedChunk$ = encodedChunk$ + MID$(base64table$, 1+sixBitVals%(1), 1)
+    encodedChunk$ = encodedChunk$ + MID$(base64table$, 1+sixBitVals%(2), 1)
+    encodedChunk$ = encodedChunk$ + MID$(base64table$, 1+sixBitVals%(3), 1)
+
+    'encodedChunk now contains four ASCI characters, so we're doing 3 byte to 4 byte encoding.
+    'This is what we write out to the output file.
+    PRINT #2, encodedChunk$;
+    
+    'Insert a newline every NUM_CHUNKS_PR_LINE
+    INC chunkCounter%
+    IF chunkCounter% >= NUM_CHUNKS_PER_LINE% THEN
+      PRINT #2
+      chunkCounter%=0
+      
+      'Print progress status here, so it's not too frequent and costly.
+      PRINT @(0) STR$(inFileLoc%)+"/"+STR$(inFileSize%);
+    ENDIF
+  LOOP
+
+  PRINT
+  
+  CLOSE #1
+  CLOSE #2
+END SUB
+
+SUB createSelfExtractor(inFilename$, outFilename$)
+  LOCAL s$
+  
+  'Copy current program to outFilen.
+  'In the process, set SELF_EXTRACTOR% to 1
+  OPEN MM.INFO$(CURRENT) FOR INPUT AS #1
+  OPEN outFilename$ FOR OUTPUT AS #2
+  
+  DO WHILE NOT EOF(#1)
+    LINE INPUT #1, s$
+    IF s$="CONST SELF_EXTRACTOR% = 0" THEN
+      s$ = "CONST SELF_EXTRACTOR% = 1"
+    ENDIF
+    PRINT #2, s$
+  LOOP
+  
+  CLOSE #1
+  
+  'Start Comment block
+  s$="#COMMENT START"
+  PRINT #2, s$
+  PRINT #2, BASE64_BLOCK_START$
+  
+  'Copy Base64 file to outfile
+  OPEN inFilename$ FOR INPUT AS #1
+  DO WHILE NOT EOF(#1)
+    LINE INPUT #1, s$
+    PRINT #2, s$
+  LOOP
+
+  'End Comment block
+  s$="#COMMENT END"
+  PRINT #2, s$        
+  
+  CLOSE #2
+  CLOSE #1
+END SUB
+
+SUB extractSelf
+  LOCAL base64startBlockFound%=0
+  LOCAL base64endBlockFound%=0
+  LOCAL s$
+    
+  'Open current program and scan until we've found the comment block
+  OPEN MM.INFO$(CURRENT) FOR INPUT AS #1
+  DO WHILE NOT EOF(#1)
+    LINE INPUT #1, s$
+    IF s$=BASE64_BLOCK_START$ THEN
+      PRINT "BASE64 block found."
+      base64StartBlockFound% = 1
+      EXIT DO
+    ENDIF
+  LOOP
+  
+  IF NOT base64StartBlockFound% THEN
+    ERROR "No BASE64 block found."
+  ENDIF
+  
+  'Read until end comment found, copying to a .base64 file
+  LOCAL basename$ = LEFT$(MM.INFO$(CURRENT), LEN(MM.INFO$(CURRENT))-4)
+  OPEN basename$+".base64" FOR OUTPUT AS #2
+  
+  PRINT "Scanning for BASE64 end of block..."
+  
+  DO WHILE NOT EOF(#1)
+    LINE INPUT #1, s$
+    IF s$="#COMMENT END" THEN
+      PRINT "BASE64 end of block found."
+      base64EndBlockFound% = 1
+      EXIT DO
+    ENDIF
+    
+    PRINT #2, s$
+  LOOP
+
+  IF NOT base64EndBlockFound% THEN
+    ERROR "BASE64 end of block not found."
+  ENDIF
+  
+  CLOSE #2
+  CLOSE #1
+
+  PRINT "Base64 decoding: "+basename$+".base64"  
+  base64decode(basename$+".base64", basename$) 
+  PRINT "Deleting intermediate .base64: "+basename$+".base64"
+  KILL basename$+".base64"
+
+  'Check last three characters of current basename to determine if this is
+  'a MAR or an MZ1 file.
+  LOCAL isMZ1% = UCASE$(RIGHT$(basename$, 3)) = "MZ1"
+  
+  ''Now strip off that mz1 or mar extension
+  basename$ = LEFT$(basename$, LEN(basename$)-4)
+  
+  IF isMZ1% THEN
+    PRINT "LZ1 decoding "+basename$+".mz1"
+    LZ1_Decode(basename$+".mz1", basename$+".mar")
+    PRINT "Deleting intermediate .mz1: "+basename$+".mz1"
+    KILL basename$+".mz1"
+  ENDIF
+  
+  MAR_extract(basename$+".mar")
+  PRINT "Deleting intermediate .mar: "+basename$+".mar"
+  KILL basename$+".mar"
+
+  PRINT "Done. 
+END SUB

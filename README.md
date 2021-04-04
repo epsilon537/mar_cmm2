@@ -1,9 +1,13 @@
 Color Maximite 2 Archiving Tool by Epsilon
 ------------------------------------------
-Current Version: 0.4
+Current Version: 0.5
 
 ChangeLog
 ---------
+0.5:
+- Added "sz" option to create self-extracting compressed archives. CMM2 implementation only.
+- Added "s" option to create self-extracting (non-compressed) archives. CMM2 implementation only.
+
 0.4:
 - Combined mac.bas and max.bas into a single program, mar.bas.
 - Added option to create and extract LZ1 compressed archives.
@@ -34,6 +38,8 @@ Usage
 On CMM2:
   *mar c <dir> : archive directory <dir> into file <dir>.mar
   *mar cz <dir> : archive and lz1 compress directory <dir> into file <dir>.mz1
+  *mar s  <dir> : archive directory <dir> into self-extracting file <dir>.mar.bas	
+  *mar sz <dir> : archive and lz1 compress directory <dir> into self-extracting file <dir>.mz1.bas	
   *mar x <archive>.mar : extract <archive>.mar archive
   *mar xz <archive>.mz1 : extract <archive>.mz1 compressed archive
 
@@ -43,9 +49,13 @@ On Windows/MacOSX/Linux:
   python mar x <archive>.mar : extract <archive>.mar archive
   python mar xz <archive>.mz1 : extract <archive>.mz1 compressed archive
 
+Limitations
+-----------
+LZ1 compression and decompression is slow.
+
 Required CMM2 firmware version
 ------------------------------
-V5.06.00
+V5.07.00b23
 
 Required Python version
 -----------------------
